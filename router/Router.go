@@ -3,7 +3,7 @@ package router
 import (
 	"net/http"
 	"time"
-	"github.com/julienrull/ghoul/v2/renderer"
+	"github.com/julienrull/ghoul/renderer"
 )
 
 type Middleware func(http.Handler) http.Handler
