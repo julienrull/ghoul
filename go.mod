@@ -1,3 +1,3 @@
-module github.com/julienrull/ghoul/v2
+module github.com/julienrull/ghoul
 
 go 1.23.2
