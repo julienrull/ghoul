@@ -2,16 +2,13 @@
 <img width="200px" height="auto" src="https://raw.githubusercontent.com/MariaLetta/free-gophers-pack/refs/heads/master/characters/png/1.png"/>
 
 > [!WARNING]
-> This library is unfinished and for my personal use cases first.
+> This library is still a work in progress and primarily tailored to my personal use cases.
 
-Simple router library on top of GO standard http module.
+A lightweight, no-fuss router built on top of Go's standard HTTP module.
 
 ## Routes
 
-You can create routes and nested routes.
-A group represent a router serving sub routes or sub groups.
-It works like a tree struct, groups are nodes and routes leafs.
-The Server is the root group/router.
+You can create routes and nest them within other routes. A group represents a router that serves sub-routes or sub-groups, functioning like a tree structure. In this structure, groups are the nodes, and routes are the leaves. The server acts as the root group or router.
 
 ```go
     var server = router.NewServer()
@@ -36,11 +33,7 @@ The Server is the root group/router.
 
 ## Middlewares
 
-You can wrap groups in middlewares.
-Group Use() method apply the middleware on itself.
-Only it and its children will be concerned by the middlewares.
-Middlewares can be nested, the last registered is the top one.
-Group and their sub routes or sub middlewares will not be served if Next() method isn't called after middleware logic.
+You can apply middlewares to groups of routes. The Use() method on a group attaches middleware to that group, affecting only the group and its child routes. Middlewares can be nested, with the most recently registered middleware applied first. If a middleware doesn't call the Next() method after executing its logic, the group's routes and any nested routes or middlewares will not be processed.
 
 ```go
     var server = router.NewServer()
@@ -59,8 +52,7 @@ Group and their sub routes or sub middlewares will not be served if Next() metho
 
 ## Redirection
 
-You can redirect a route to another routes or nested route.
-Here is a redirection you can perform when handle signin failures.
+You can redirect one route to another route or a nested route. For example, you can handle sign-in failures by redirecting a POST request back to the same route as a GET request.
 
 ```go
     var server = router.NewServer()
@@ -77,8 +69,7 @@ Here is a redirection you can perform when handle signin failures.
 
 ## Templating
 
-Ghoul came with its own templating system on top of GO template.
-You can define layouts that will wrap the rendered template.
+The library includes its own templating system built on top of Go templates. You can define layouts that wrap around the rendered templates.
 
 ```go
     var server = router.NewServer()
