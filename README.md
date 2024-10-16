@@ -1,5 +1,5 @@
 <h1>Ghoul</h1>
-<img width="200px" height="auto" src="https://cdn.pixabay.com/photo/2016/03/31/20/56/evil-1296097_1280.png"/>
+<img width="200px" height="auto" src="https://raw.githubusercontent.com/MariaLetta/free-gophers-pack/refs/heads/master/characters/png/1.png"/>
 
 > [!WARNING]
 > This library is unfinished and for my personal use cases first.
@@ -78,7 +78,7 @@ Here is a redirection you can perform when handle signin failures.
 ## Templating
 
 Ghoul came with its own templating system on top of GO template.
-You can define layouts template that will wrap the rendered layout.
+You can define layouts that will wrap the rendered template.
 
 ```go
     var server = router.NewServer()
