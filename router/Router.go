@@ -1,26 +1,19 @@
-package router
+package main
 
 import (
+	"fmt"
 	"net/http"
+	"reflect"
 	"time"
+
 	"github.com/julienrull/ghoul/v1/renderer"
 )
 
-type Middleware func(http.Handler) http.Handler
+type Middleware = func(http.Handler) http.Handler
+type MiddlewareHandler = ContextHandler
+type ContextHandler = func(Ctx) error
 
-type MiddlewareHandler ContextHandler
-
-//func CreateStack(xs ...Middleware) Middleware {
-//    return func(next http.Handler) http.Handler  {
-//        for i := len(xs)-1; i >= 0; i-- {
-//            x := xs[i]
-//            next  = x(next)
-//        }
-//        return next
-//    }
-//}
-
-type Context struct {
+type Ctx struct {
     Request     *http.Request
     Response    http.ResponseWriter
     Status      int
@@ -28,138 +21,24 @@ type Context struct {
     Renderer    *renderer.Renderer
 }
 
-func (c *Context) Next() {
-    c.Handle.ServeHTTP(c.Response, c.Request)
+func (c *Ctx) Next() {
+    if c.Handle != nil {
+        c.Handle.ServeHTTP(c.Response, c.Request)
+    }
 }
 
-func (c *Context) Redirect(path string, status int) {
+func (c *Ctx) Redirect(path string, status int) {
     http.Redirect(c.Response, c.Request, path, status)
 }
 
-func (c *Context) Render(tmplName string, data map[string]any, layouts ...string) {
+func (c *Ctx) Render(tmplName string, data map[string]any, layouts ...string) {
     c.Renderer.Render(c.Response, tmplName, data, layouts...) 
 }
 
-type ContextHandler func(Context) (Context, error)
 
-type ServerConfig struct {
-    Host                string
-    Port                string
-    RequestTimeout      time.Duration 
-    ResponseTimeout     time.Duration
-    RequestHeaderSize   int
-}
-
-var serverConfig = ServerConfig {
-    Host:               "localhost", 
-    Port:               "3000", 
-    RequestTimeout:     10 * time.Second,
-    ResponseTimeout:    10 * time.Second,
-    RequestHeaderSize:  1 << 20,
-}
-
-type Server struct {
-    Renderer *renderer.Renderer
-    Server  http.Server     
-    Mux     *http.ServeMux     
-    Handle  http.Handler     
-    Childs  []*Router     
-} 
-
-func NewServer() *Server {
-    mux := http.NewServeMux()
-    renderer := renderer.NewRenderer("./views/", ".html")
-    var handle http.Handler = mux
-    server := &Server{
-        Renderer: renderer,
-        Server: http.Server{
-            Addr:           serverConfig.Host + ":" + serverConfig.Port,
-            ReadTimeout:    serverConfig.RequestTimeout,
-            WriteTimeout:   serverConfig.ResponseTimeout,
-            MaxHeaderBytes: serverConfig.RequestHeaderSize,
-            Handler: handle,
-        },
-        Mux: mux,
-        Handle: handle,
-        Childs: make([]*Router, 0, 16),
-    }
-    return server
-}
-
-func (s *Server) Register(routers []*Router) []*Router {
-    if len(routers) > 0{
-        for _, router := range routers {
-            subRouters := s.Register(router.Childs) 
-            if len(subRouters) > 0 {
-                for _, subRouter := range subRouters {
-                    router.Mux.Handle(router.BaseUrl + "/", subRouter.Handle)
-                }
-            }
-        }
-    }
-    return routers
-}
-
-func (s *Server) Run(){
-    subRouters := s.Register(s.Childs)
-    if len(subRouters) > 0 {
-        for _, subRouter := range subRouters {
-            s.Mux.Handle(subRouter.BaseUrl + "/", subRouter.Handle)
-        }
-    }
-}
-
-func (s *Server) ListenAndServe(){
-    s.Run()
-    s.Server.ListenAndServe()
-}
-
-func (s *Server) Route(method string, path string, handler ContextHandler) {
-    handle := s.Handle
-    s.Mux.HandleFunc(method + " " + path, func(w http.ResponseWriter, req *http.Request) {
-        handler(Context{
-            Response: w,
-            Request:  req,
-            Handle: handle,
-            Renderer: s.Renderer,
-        }) 
-    })
-}
-
-func (s *Server) Get(path string, handler ContextHandler) {
-    s.Route("GET", path, handler)
-}
-
-func (s *Server) Post(path string, handler ContextHandler) {
-    s.Route("POST", path, handler)
-}
-
-func (s *Server) Use(middleware MiddlewareHandler) {
-    handle := s.Handle
-    s.Handle = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        middleware(Context{
-            Response: w,
-            Request:  r,
-            Handle: handle,
-            Renderer: s.Renderer,
-        }) 
-    })
-}
-
-func (s *Server) Group(path string) *Router{
-   mux := http.NewServeMux()
-   router := &Router{
-        BaseUrl: path,
-        Handle: mux,
-        Mux: mux,
-        Renderer: s.Renderer,
-        Childs: make([]*Router, 0, 16),
-   }
-   s.Childs = append(s.Childs, router)
-   return router
-}
 
 type Router struct {
+    Server      *http.Server
     BaseUrl     string
     Handle      http.Handler
     Mux         *http.ServeMux
@@ -167,47 +46,172 @@ type Router struct {
     Renderer    *renderer.Renderer
 }
 
-func (r *Router) Group(path string) *Router{
+func New() *Router {
     mux := http.NewServeMux()
-    router := &Router{
-         BaseUrl: r.BaseUrl + path,
-         Handle: mux,
-         Mux: mux,
-         Renderer: r.Renderer,
-         Childs: make([]*Router, 0, 16),
+    return &Router{
+        Handle: mux,
+        Mux: mux,
+        BaseUrl: "",
+        Server: &http.Server{
+            Addr:           "localhost:3000",
+            ReadTimeout:    10 * time.Second,
+            WriteTimeout:   10 * time.Second,
+            MaxHeaderBytes: 1 << 20,
+            Handler: nil,
+        },
     }
-    r.Childs = append(r.Childs, router)
-    return router
 }
 
-func (r *Router) Route(method string, path string, handler ContextHandler) {
-    handle := r.Handle
-    r.Mux.HandleFunc(method + " " + r.BaseUrl + path, func(w http.ResponseWriter, req *http.Request) {
-        handler(Context{
-            Response: w,
-            Request:  req,
-            Handle: handle,
-            Renderer: r.Renderer,
-        }) 
+func (r *Router) Group(path string, middlewares ...ContextHandler) *Router{
+    var handle ContextHandler = nil
+    var handles []ContextHandler = nil
+    if len(middlewares) > 1 {
+       handle =  middlewares[0]
+       handles =  middlewares[1:]
+    } else if len(middlewares) == 1 {
+       handle =  middlewares[0]
+    }    
+    return r.Add("GROUP", path, handle, handles...)
+}
+
+func (r *Router) Get(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add("GET", path, handler, middlewares...)
+}
+
+func (r *Router) Post(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add("POST", path, handler, middlewares...)
+}
+
+func (r *Router) CreateStack(middlewares ...ContextHandler) Middleware {
+    return func(next http.Handler) http.Handler  {
+        for i := len(middlewares)-1; i >= 0; i-- {
+           h := middlewares[i]
+           prenext := next
+           next = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+               h(Ctx{
+                   Response: w,
+                   Request:  req,
+                   Renderer: r.Renderer,
+                   Handle: prenext,
+               }) 
+           })
+        }
+        return next
+    }
+}
+
+func (r *Router) register(handlers []ContextHandler) http.Handler {
+    var handler http.Handler = nil
+    if handlers != nil {
+        if len(handlers) > 1 {
+            stack := r.CreateStack(handlers[1:]...)
+            handler = stack(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+                handlers[0](Ctx{
+                    Response: w,
+                    Request:  req,
+                    Renderer: r.Renderer,
+                    Handle: nil,
+                }) 
+            }))
+        }else if len(handlers) == 1{
+            handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+                handlers[0](Ctx{
+                    Response: w,
+                    Request:  req,
+                    Renderer: r.Renderer,
+                    Handle: nil,
+                }) 
+            })
+        }
+    }
+    if handler == nil {
+        panic("no handlers provided")
+    }
+    return handler
+}
+
+
+func (r *Router) Add(method string, path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    handlers := append([]ContextHandler{handler}, middlewares...)
+    handle := r.register(handlers)
+    if method == "USE"{
+        path = r.BaseUrl + path + "/"
+    } else if method == "GROUP" {
+        path = r.BaseUrl + path 
+        mux := http.NewServeMux()
+        gr := &Router{
+            Handle: mux,
+            Mux: mux,
+            BaseUrl: path,
+        }
+        gr.Mux.Handle(path + "/", handle)
+        r.Mux.Handle(path + "/", gr.Handle)
+        return gr
+    }else{
+        path = method + " " + r.BaseUrl + path
+    }
+    r.Mux.Handle(path, handle)
+    return r
+}
+
+func (r *Router) Use(args ...any) *Router {
+	var prefix string = "/"
+	//var subRouter *Router
+	var prefixes []string
+	var handlers []ContextHandler
+
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i].(type) {
+		case string:
+			prefix = arg
+		//case *Router:
+		//	subRouter = arg
+		case []string:
+			prefixes = arg
+		case ContextHandler:
+			handlers = append(handlers, arg)
+		default:
+			panic(fmt.Sprintf("use: invalid handler %v\n", reflect.TypeOf(arg)))
+		}
+	}
+	if len(prefixes) == 0 {
+		prefixes = append(prefixes, prefix)
+	}
+	for _, prefix := range prefixes {
+        r.Add("USE", prefix, handlers[0], handlers[1:]...)
+	}
+	return r
+}
+
+func (r *Router) PostInit() {
+    if r.Server != nil {
+        r.Server.Handler = r.Mux
+        return
+    } 
+    panic("Can't listen and serve from sub router")
+}
+
+func (r *Router) ListenAndServe() {
+    r.PostInit()
+    r.Server.ListenAndServe()
+}
+
+func main() {
+    app := New()
+    app.Get("/hello", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("Hello Ghoul"))
+        return nil
+    }, func(c Ctx) error {
+        c.Next() 
+        return nil
     })
-}
-
-func (r *Router) Get(path string, handler ContextHandler) {
-    r.Route("GET", path, handler)
-}
-
-func (r *Router) Post(path string, handler ContextHandler) {
-    r.Route("POST", path, handler)
-}
-
-func (r *Router) Use(middleware MiddlewareHandler) {
-    handle := r.Handle
-    r.Handle = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-        middleware(Context{
-            Response: w,
-            Request:  req,
-            Handle: handle,
-            Renderer: r.Renderer,
-        }) 
+    good := app.Group("/good", func(ctx Ctx) error {
+        ctx.Next()
+        return nil
     })
+    good.Get("/so6", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("Hello Good So6"))
+        return nil
+    })
+    app.ListenAndServe()
 }
