@@ -1,4 +1,4 @@
-package main
+package ghoul
 
 import (
 	"fmt"
@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/julienrull/ghoul/v1/renderer"
 )
 
 type Middleware = func(http.Handler) http.Handler
@@ -19,7 +17,7 @@ type Ctx struct {
     Response    http.ResponseWriter
     Status      int
     Handle      http.Handler
-    Renderer    *renderer.Renderer
+    Renderer    *Renderer
 }
 
 func (c *Ctx) Next() {
@@ -45,7 +43,7 @@ type Router struct {
     BaseUrl     string
     Handle      http.Handler
     Mux         *http.ServeMux
-    Renderer    *renderer.Renderer
+    Renderer    *Renderer
 }
 
 func New() *Router {
@@ -224,23 +222,3 @@ func (r *Router) ListenAndServe() {
     r.PostInit()
     r.Server.ListenAndServe()
 }
-
-//func main() {
-//    app := New()
-//    app.Get("/hello", func(ctx Ctx) error {
-//        ctx.Response.Write([]byte("Hello Ghoul"))
-//        return nil
-//    }, func(c Ctx) error {
-//        c.Next() 
-//        return nil
-//    })
-//    good := app.Group("/good", func(ctx Ctx) error {
-//        ctx.Next()
-//        return nil
-//    })
-//    good.Get("/so6", func(ctx Ctx) error {
-//        ctx.Response.Write([]byte("Hello Good So6"))
-//        return nil
-//    })
-//    app.ListenAndServe()
-//}

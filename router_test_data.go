@@ -1,11 +1,9 @@
-package main
+package ghoul
 
 import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/julienrull/ghoul/v1/renderer"
 )
 
 type Client struct {
@@ -51,7 +49,7 @@ func auth_guard_middleware(ctx Ctx) error {
 func GetServer() *Router {
     is_auth = false
     app := New()
-    app.Renderer = renderer.NewRenderer("./", ".html")
+    app.Renderer = NewRenderer("./", ".html")
     app.Get("/landing", func(ctx Ctx) error {
         ctx.Response.Write([]byte("landing"))
         return nil

@@ -1,4 +1,4 @@
-package main 
+package ghoul
 
 import (
 	"net/http/httptest"
