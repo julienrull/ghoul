@@ -30,101 +30,44 @@ func (c Client) TestPostQuery(path string) (string, error) {
     return string(out), nil
 }
 
+
+var is_auth = false
+
+func auth_guard_middleware(ctx Ctx) error {
+   fmt.Println(ctx.Request.URL.RequestURI())
+   if !is_auth {
+       if ctx.Request.URL.RequestURI() == "/user/home" {
+        ctx.Redirect("/guest/signin", http.StatusSeeOther)
+       }
+   }else{
+    if ctx.Request.URL.RequestURI() == "/guest/signin" {
+       ctx.Redirect("/user/home", http.StatusSeeOther)
+    }
+   }
+   ctx.Next()
+   return nil 
+}
+
 func GetServer() *Router {
+    is_auth = false
     app := New()
     app.Renderer = renderer.NewRenderer("./", ".html")
-    app.Get("/simpleroute", func(ctx Ctx) error {
-        ctx.Response.Header().Add("Content-Type", "text/html")
-        ctx.Render("test", map[string]any{})
+    app.Get("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landing"))
         return nil
     })
-    app.Post("/simpleroute", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("simpleroutepost"))
+    guest := app.Group("/guest")
+    guest.Get("/signin", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("signin"))
         return nil
-    })
-
-    nestedRoute := app.Group("/nestedRoute", func(c Ctx) error {
-        c.Next()
+    }).Post("/signin", func(ctx Ctx) error {
+        is_auth = true
+        ctx.Redirect("/user/home", http.StatusSeeOther)
         return nil
-    })
-    nestedRoute.Get("/nested", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("nestedget"))
-        return nil
-    })
-    nestedRoute.Post("/nested", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("nestedpost"))
-        return nil
-    })
-
-    subnestedroute := nestedRoute.Group("/subnestedroute", func(c Ctx) error {
-        c.Next()
-        return nil
-    })
-    subnestedroute.Get("/subnested", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("subnestedget"))
-        return nil
-    })
-    subnestedroute.Post("/subnested", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("subnestedpost"))
-        return nil
-    })
-
-    simplemiddleware := app.Group("/simplemiddleware", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("simplemiddleware"))
-        //ctx.Next()
-        return nil
-    })
-    simplemiddleware.Get("/notexecuted", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("notexecutedget"))
-        return nil
-    })
-    simplemiddleware.Post("/notexecuted", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("notexecutedpost"))
-        return nil
-    })
-
-    firstmiddleware := app.Group("/firstmiddleware", func(ctx Ctx) error {
-        fmt.Println("GROUP")
-        //ctx.Next()
-        return nil
-    })
-    //firstmiddleware.Use(func(ctx Ctx) error {
-    //    fmt.Println("USE")
-    //    ctx.Next()
-    //    return nil
-    //})
-
-    secondmiddleware := firstmiddleware.Group("/secondmiddleware")
-    secondmiddleware.Get("/notexecuted", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("notexecutedget"))
-        return nil
-    })
-    secondmiddleware.Post("/notexecuted", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("notexecutedpost"))
-        return nil
-    })
-    app.Get("/redirectroute", func(ctx Ctx) error {
-        ctx.Redirect("/redirecttarget", http.StatusSeeOther)
-        return nil
-    })
-    app.Get("/redirecttarget", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("redirecttarget"))
-        return nil
-    })
-    app.Use(func(ctx Ctx) error {
-        ctx.Next()
-        return nil
-    })
-    nextroute := app.Group("/nextroute", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("subnestedpost"))
-        return nil
-    })
-    nextroute.Use(func(ctx Ctx) error {
-        ctx.Next()
-        return nil
-    })
-    nextroute.Get("/subnextroute", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("subnextroute"))
+    }).Use(auth_guard_middleware)
+    user := app.Group("/user", auth_guard_middleware)
+    user.Get("/home", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("home"))
         return nil
     })
     app.PostInit()
