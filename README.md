@@ -47,7 +47,7 @@ The Use() method applies middleware globally, but their execution is conditional
 
 The Group() method allows you to define middleware that applies only to the routes within that group and its nested sub-groups and sub-routes.
 
-## Get(), Post(), etc.
+### Get(), Post(), etc.
 
 Standard HTTP methods (such as Get(), Post(), etc.) can also take middlewares, but these will apply specifically to the individual route where they are defined.
 
