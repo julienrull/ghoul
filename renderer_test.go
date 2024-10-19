@@ -6,10 +6,11 @@ import (
 	"testing"
 )
 
+
 func TestRender(t *testing.T) {
     r := NewRenderer("./views/", ".html")  
     buf := bytes.NewBufferString("")
-    r.Render(buf, "body", map[string]any{"bodyData": "Hello Test"}, "layouts/main")
+    r.Render(buf, "render", map[string]any{"bodyData": "Hello Test"}, "layouts/rendermain")
 exp := strings.ReplaceAll(`
 <!doctype html>
 <html lang="en">

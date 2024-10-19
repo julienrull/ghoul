@@ -2,6 +2,7 @@ package ghoul
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -34,7 +35,7 @@ func TestNestedRoute(t *testing.T) {
     c := NewClient(st.URL)
 
     res1, _ := c.TestGetQuery("/guest/signin")
-    res2, _ := c.TestGetQuery("/user/home")
+    res2, _ := c.TestGetQuery("/users/1/home")
 
     res1exp := "signin"
     res2exp := "signin"
@@ -54,13 +55,27 @@ func TestMiddleware(t *testing.T) {
     defer st.Close()   
     c := NewClient(st.URL)
 
-    res1, _ := c.TestGetQuery("/user/home")
+    res1, _ := c.TestGetQuery("/users/1/home")
     res2, _ := c.TestPostQuery("/guest/signin")
     res3, _ := c.TestGetQuery("/guest/signin")
+    res4, _ := c.TestGetQuery("/users/1/posts/1")
 
     res1exp := "signin"
-    res2exp := "home"
-    res3exp := "home"
+    res2exp := "user n°1"
+    res3exp := "user n°1"
+    res4exp := `<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>test</title>
+    </head>
+    <body>
+        <h1>Main layout</h1> 
+        <main >
+            <h1>Post n°1</h1>
+        </main>
+    </body>
+</html>`
 
     if res1 != res1exp {
         t.Errorf("expected res to be %s got %s", res1exp, res1)
@@ -70,5 +85,13 @@ func TestMiddleware(t *testing.T) {
     }
     if res3 != res3exp {
         t.Errorf("expected res to be %s got %s", res3exp, res3)
+    }
+
+    res4expTrimed := strings.Replace(res4exp, " ", "", -1)
+    res4expTrimed = strings.Replace(res4expTrimed, "\n", "", -1)
+    res4Trimed := strings.Replace(res4, " ", "", -1)
+    res4Trimed = strings.Replace(res4Trimed, "\n", "", -1)
+    if res4Trimed != res4expTrimed {
+        t.Errorf("expected res to be %s got %s", res4expTrimed, res4Trimed)
     }
 }

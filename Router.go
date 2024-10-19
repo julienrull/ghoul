@@ -1,43 +1,27 @@
 package ghoul
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"reflect"
 	"strings"
+	"syscall"
 	"time"
 )
 
 type Middleware = func(http.Handler) http.Handler
 type MiddlewareHandler = ContextHandler
-type ContextHandler = func(Ctx) error
 
-type Ctx struct {
-    Request     *http.Request
-    Response    http.ResponseWriter
-    Status      int
-    Handle      http.Handler
-    Renderer    *Renderer
-}
-
-func (c *Ctx) Next() {
-    if c.Handle != nil {
-        c.Handle.ServeHTTP(c.Response, c.Request)
-    }
-}
-
-func (c *Ctx) Redirect(path string, status int) {
-    http.Redirect(c.Response, c.Request, path, status)
-}
-
-func (c *Ctx) Render(tmplName string, data map[string]any, layouts ...string) {
-    c.Renderer.Render(c.Response, tmplName, data, layouts...) 
-}
 
 
 
 type Router struct {
     Server      *http.Server
+    signalOut   chan os.Signal
     Root        *Router 
     isRoot      bool
     BaseUrl     string
@@ -48,10 +32,13 @@ type Router struct {
 
 func New() *Router {
     mux := http.NewServeMux()
+    done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
     router := &Router{
         Handle: mux,
         Mux: mux,
         BaseUrl: "",
+        signalOut: done,
         Server: &http.Server{
             Addr:           "localhost:3000",
             ReadTimeout:    10 * time.Second,
@@ -64,6 +51,11 @@ func New() *Router {
     router.Root = router
     return router
 }
+
+func (r *Router) Close(){
+    r.Server.Close()
+}
+
 
 func (r *Router) CreateStack(middlewares ...ContextHandler) Middleware {
     return func(next http.Handler) http.Handler  {
@@ -174,6 +166,7 @@ func (r *Router) Add(method string, path string, handler ContextHandler, middlew
                 Server: r.Server,
                 isRoot: false,
                 Root: r.Root,
+                Renderer: r.Renderer,
             }
             path += "/"
             handle = stack(router.Handle)
@@ -186,6 +179,7 @@ func (r *Router) Add(method string, path string, handler ContextHandler, middlew
                 Server: r.Server,
                 isRoot: false,
                 Root: r.Root,
+                Renderer: r.Renderer,
             }
             path += "/"
             handle = router.Handle
@@ -193,7 +187,6 @@ func (r *Router) Add(method string, path string, handler ContextHandler, middlew
             stack = r.CreateStack(midd_handlers...) 
             root := r.Root.Handle
             r.Root.Handle = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-                fmt.Println(req.URL.RequestURI(), path)
                if strings.HasPrefix(req.URL.RequestURI(), path) {
                     next := stack(root)
                     next.ServeHTTP(w, req)
@@ -220,5 +213,29 @@ func (r *Router) PostInit() {
 
 func (r *Router) ListenAndServe() {
     r.PostInit()
-    r.Server.ListenAndServe()
+	go func() {
+		if err := r.Server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+    fmt.Println(`
+ ▗▄▄▖▗▖ ▗▖ ▗▄▖ ▗▖ ▗▖▗▖   
+▐▌   ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌▐▌   
+▐▌▝▜▌▐▛▀▜▌▐▌ ▐▌▐▌ ▐▌▐▌   
+▝▚▄▞▘▐▌ ▐▌▝▚▄▞▘▝▚▄▞▘▐▙▄▄▖`)
+    fmt.Printf("\nSERVE ON : http://%s\n", r.Server.Addr)
+
+	<-r.signalOut
+	fmt.Print("Server Stopped")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer func() {
+		// extra handling here
+		cancel()
+	}()
+
+	if err := r.Server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server Shutdown Failed:%+v", err)
+	}
+    fmt.Print("Server Exited Properly")
 }
