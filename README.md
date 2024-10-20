@@ -6,6 +6,11 @@
 
 A lightweight, no-fuss router built on top of Go's standard HTTP module.
 
+## Installation
+
+``` sh
+go get -u github.com/julienrull/ghoul
+```
 
 ## Routes
 
