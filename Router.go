@@ -52,11 +52,6 @@ func New() *Router {
     return router
 }
 
-func (r *Router) Close(){
-    r.Server.Close()
-}
-
-
 func (r *Router) CreateStack(middlewares ...ContextHandler) Middleware {
     return func(next http.Handler) http.Handler  {
         for i := len(middlewares)-1; i >= 0; i-- {
@@ -80,11 +75,43 @@ func (r *Router) Group(path string, middlewares ...ContextHandler) *Router{
 }
 
 func (r *Router) Get(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
-    return r.Add("GET", path, handler, middlewares...)
+    return r.Add(http.MethodGet, path, handler, middlewares...)
+}
+
+func (r *Router) Head(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodHead, path, handler, middlewares...)
 }
 
 func (r *Router) Post(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
-    return r.Add("POST", path, handler, middlewares...)
+    return r.Add(http.MethodPost, path, handler, middlewares...)
+}
+
+func (r *Router) Put(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodPut, path, handler, middlewares...)
+}
+
+func (r *Router) Delete(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodDelete, path, handler, middlewares...)
+}
+
+func (r *Router) Connect(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodConnect, path, handler, middlewares...)
+}
+
+func (r *Router) Options(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodOptions, path, handler, middlewares...)
+}
+
+func (r *Router) Trace(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodTrace, path, handler, middlewares...)
+}
+
+func (r *Router) Patch(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add(http.MethodPatch, path, handler, middlewares...)
+}
+
+func (r *Router) All(path string, handler ContextHandler, middlewares ...ContextHandler) *Router {
+    return r.Add("", path, handler, middlewares...)
 }
 
 func (r *Router) Use(args ...any) *Router {
@@ -92,7 +119,6 @@ func (r *Router) Use(args ...any) *Router {
 	//var subRouter *Router
 	var prefixes []string
 	var handlers []ContextHandler
-
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i].(type) {
 		case string:
@@ -135,7 +161,9 @@ func (r *Router) Add(method string, path string, handler ContextHandler, middlew
 
     if main_handler != nil && len(midd_handlers) > 0 {
         stack = r.CreateStack(midd_handlers...) 
-        path = method + " " + path
+        if method != "" {
+            path = method + " " + path
+        }
         handle = stack(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
             main_handler(Ctx{
                 Response: w,

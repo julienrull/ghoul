@@ -1,8 +1,10 @@
 package ghoul
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 )
 
 type Client struct {
@@ -13,18 +15,24 @@ func NewClient(url string) Client {
     return Client{url}
 }
 
-func (c Client) TestGetQuery(path string) (string, error) {
-    res, _ := http.Get(c.url + path)
-    defer res.Body.Close()
-    out, _ := io.ReadAll(res.Body)
-    return string(out), nil
-}
 
-func (c Client) TestPostQuery(path string) (string, error) {
-    res, _ := http.Post(c.url + path, "", nil)
-    defer res.Body.Close()
-    out, _ := io.ReadAll(res.Body)
-    return string(out), nil
+func (c Client) TestQuery(method string, path string) (string, error) {
+	req, err := http.NewRequest(method, c.url + path, nil)
+	if err != nil {
+		fmt.Printf("client: could not create request: %s\n", err)
+		os.Exit(1)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Printf("client: error making http request: %s\n", err)
+		os.Exit(1)
+	}
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Printf("client: could not read response body: %s\n", err)
+		os.Exit(1)
+	}
+    return string(resBody), nil
 }
 
 
@@ -64,6 +72,30 @@ func GetServer() *Router {
     app.Get("/landing", func(ctx Ctx) error {
         ctx.Response.Write([]byte("landing"))
         return nil
+    }).Head("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landinghead"))
+        return nil
+    }).Put("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landingput"))
+        return nil
+    }).Delete("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landingdelete"))
+        return nil
+    }).Connect("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landingconnect"))
+        return nil
+    }).Options("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landingoptions"))
+        return nil
+    }).Trace("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landingtrace"))
+        return nil
+    }).Patch("/landing", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("landingpatch"))
+        return nil
+    }).All("/all", func(ctx Ctx) error {
+        ctx.Response.Write([]byte("all"))
+        return nil
     })
 
     guest := app.Group("/guest")
@@ -74,7 +106,7 @@ func GetServer() *Router {
         is_auth = true
         ctx.Redirect("/users/1/home", http.StatusSeeOther)
         return nil
-    }).Use(auth_guard_middleware)
+    }).Use(auth_guard_middleware).Use("/admin", log_middleware, admin_middleware).Use([]string{"/stats", "/secret"}, log_middleware)
 
     app.Get("/users", func(ctx Ctx) error {
         ctx.Response.Write([]byte("users"))
