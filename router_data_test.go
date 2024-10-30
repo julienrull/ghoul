@@ -41,11 +41,11 @@ var is_admin = false
 
 func auth_guard_middleware(ctx Ctx) error {
    if !is_auth {
-       if ctx.Request.URL.RequestURI() == "/users/1/home" {
+       if ctx.Request().URL.RequestURI() == "/users/1/home" {
         ctx.Redirect("/guest/signin", http.StatusSeeOther)
        }
    }else{
-    if ctx.Request.URL.RequestURI() == "/guest/signin" {
+    if ctx.Request().URL.RequestURI() == "/guest/signin" {
        ctx.Redirect("/users/1/home", http.StatusSeeOther)
     }
    }
@@ -70,37 +70,37 @@ func GetServer() *Router {
     app := New()
     app.Renderer = NewRenderer("./views/", ".html")
     app.Get("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landing"))
+        ctx.Write([]byte("landing"))
         return nil
     }).Head("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landinghead"))
+        ctx.Write([]byte("landinghead"))
         return nil
     }).Put("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landingput"))
+        ctx.Write([]byte("landingput"))
         return nil
     }).Delete("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landingdelete"))
+        ctx.Write([]byte("landingdelete"))
         return nil
     }).Connect("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landingconnect"))
+        ctx.Write([]byte("landingconnect"))
         return nil
     }).Options("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landingoptions"))
+        ctx.Write([]byte("landingoptions"))
         return nil
     }).Trace("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landingtrace"))
+        ctx.Write([]byte("landingtrace"))
         return nil
     }).Patch("/landing", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("landingpatch"))
+        ctx.Write([]byte("landingpatch"))
         return nil
     }).All("/all", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("all"))
+        ctx.Write([]byte("all"))
         return nil
     })
 
     guest := app.Group("/guest")
     guest.Get("/signin", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("signin"))
+        ctx.Write([]byte("signin"))
         return nil
     }).Post("/signin", func(ctx Ctx) error {
         is_auth = true
@@ -109,24 +109,24 @@ func GetServer() *Router {
     }).Use(auth_guard_middleware).Use("/admin", log_middleware, admin_middleware).Use([]string{"/stats", "/secret"}, log_middleware)
 
     app.Get("/users", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("users"))
+        ctx.Write([]byte("users"))
         return nil
     }, auth_guard_middleware)
 
     users := app.Group("/users/{userid}", auth_guard_middleware)
 
     users.Get("/home", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("user n°" + ctx.Request.PathValue("userid")))
+        ctx.Write([]byte("user n°" + ctx.Request().PathValue("userid")))
         return nil
     })
     posts := users.Group("/posts")
     posts.Get("/{postid}", func(ctx Ctx) error {
         //ctx.Response.Write([]byte("post n°" + ctx.Request.PathValue("postid")))
-        ctx.Render("body", map[string]any{"postid": ctx.Request.PathValue("postid")}, "layouts/main")
+        ctx.Render("body", map[string]any{"postid": ctx.Request().PathValue("postid")}, "layouts/main")
         return nil
     }, log_middleware)
     posts.Get("/archives/{id}", func(ctx Ctx) error {
-        ctx.Response.Write([]byte("post n°" + ctx.Request.PathValue("archivepostid")))
+        ctx.Write([]byte("post n°" + ctx.Request().PathValue("archivepostid")))
         return nil
     }, log_middleware, log_middleware)
     app.PostInit()

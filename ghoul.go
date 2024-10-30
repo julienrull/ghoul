@@ -2,8 +2,10 @@ package ghoul
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,12 +14,6 @@ import (
 	"syscall"
 	"time"
 )
-
-type Middleware = func(http.Handler) http.Handler
-type MiddlewareHandler = ContextHandler
-
-
-
 
 type Router struct {
     Server      *http.Server
@@ -30,7 +26,45 @@ type Router struct {
     Renderer    *Renderer
 }
 
-func New() *Router {
+type Config struct {
+    Addr                            string
+    ReadTimeout                     time.Duration
+    WriteTimeout                    time.Duration
+    IdleTimeout                     time.Duration
+    ReadHeaderTimeout               time.Duration
+    MaxHeaderBytes                  int
+    Handler                         http.Handler
+    DisableGeneralOptionsHandler    bool
+    TLSConfig                       *tls.Config
+    TLSNextProto                    map[string]func(*http.Server, *tls.Conn, http.Handler)
+    ConnState                       func(net.Conn, http.ConnState)
+    ErrorLog                        *log.Logger
+    BaseContext                     func(net.Listener) context.Context
+    ConnContext                     func(ctx context.Context, c net.Conn) context.Context
+}
+
+var defaultConfiguration = Config{
+    Addr:                           ":http",
+    Handler:                        http.DefaultServeMux,
+    DisableGeneralOptionsHandler:   false,
+    TLSConfig:                      nil,
+    ReadTimeout:                    0,
+    ReadHeaderTimeout:              0,
+    WriteTimeout:                   0,
+    IdleTimeout:                    0,
+    MaxHeaderBytes:                 http.DefaultMaxHeaderBytes,
+    TLSNextProto:                   nil,
+    ConnState:                      nil,
+    ErrorLog:                       log.Default(),
+    BaseContext:                    func(l net.Listener) context.Context {return context.Background()} ,
+    ConnContext:                    nil,
+}
+
+func New(config ...Config) *Router {
+    newConfig := defaultConfiguration
+    if len(config) > 0 {
+        newConfig = config[0]
+    }
     mux := http.NewServeMux()
     done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -39,14 +73,23 @@ func New() *Router {
         Mux: mux,
         BaseUrl: "",
         signalOut: done,
-        Server: &http.Server{
-            Addr:           "localhost:3000",
-            ReadTimeout:    10 * time.Second,
-            WriteTimeout:   10 * time.Second,
-            MaxHeaderBytes: 1 << 20,
-            Handler: nil,
-        },
         isRoot: true,
+        Server: &http.Server{
+            Addr:                         newConfig.Addr, 
+            Handler:                      newConfig.Handler, 
+            DisableGeneralOptionsHandler: newConfig.DisableGeneralOptionsHandler, 
+            TLSConfig:                    newConfig.TLSConfig, 
+            ReadTimeout:                  newConfig.ReadTimeout, 
+            ReadHeaderTimeout:            newConfig.ReadHeaderTimeout, 
+            WriteTimeout:                 newConfig.WriteTimeout, 
+            IdleTimeout:                  newConfig.IdleTimeout, 
+            MaxHeaderBytes:               newConfig.MaxHeaderBytes, 
+            TLSNextProto:                 newConfig.TLSNextProto, 
+            ConnState:                    newConfig.ConnState, 
+            ErrorLog:                     newConfig.ErrorLog, 
+            BaseContext:                  newConfig.BaseContext, 
+            ConnContext:                  newConfig.ConnContext,  
+        },
     }
     router.Root = router
     return router
@@ -59,10 +102,10 @@ func (r *Router) CreateStack(middlewares ...ContextHandler) Middleware {
            prenext := next
            next = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
                h(Ctx{
-                   Response: w,
-                   Request:  req,
-                   Renderer: r.Renderer,
-                   Handle: prenext,
+                   w: w,
+                   r:  req,
+                   renderer: r.Renderer,
+                   handler: prenext,
                }) 
            })
         }
@@ -166,10 +209,10 @@ func (r *Router) Add(method string, path string, handler ContextHandler, middlew
         }
         handle = stack(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
             main_handler(Ctx{
-                Response: w,
-                Request:  req,
-                Renderer: r.Renderer,
-                Handle: nil,
+                w: w,
+                r:  req,
+                renderer: r.Renderer,
+                handler: nil,
             })
         }))
     } else if main_handler != nil {
@@ -177,10 +220,10 @@ func (r *Router) Add(method string, path string, handler ContextHandler, middlew
         path = method + " " + path
         handle = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
             main_handler(Ctx{
-                Response: w,
-                Request:  req,
-                Renderer: r.Renderer,
-                Handle: nil,
+                w: w,
+                r:  req,
+                renderer: r.Renderer,
+                handler: nil,
             })
         })
     }else{
@@ -239,6 +282,16 @@ func (r *Router) PostInit() {
     panic("Can't listen and serve from sub router")
 }
 
+func (r *Router) ListenAndServeTLS(certFile, keyFile string) {
+    r.PostInit()
+	go func() {
+		if err := r.Server.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+    r.Exit()
+}
+
 func (r *Router) ListenAndServe() {
     r.PostInit()
 	go func() {
@@ -246,6 +299,10 @@ func (r *Router) ListenAndServe() {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
+    r.Exit()
+}
+
+func (r *Router) Exit() {
     fmt.Println(`
  ▗▄▄▖▗▖ ▗▖ ▗▄▖ ▗▖ ▗▖▗▖   
 ▐▌   ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌▐▌   
@@ -254,7 +311,7 @@ func (r *Router) ListenAndServe() {
     fmt.Printf("\nSERVE ON : http://%s\n", r.Server.Addr)
 
 	<-r.signalOut
-	fmt.Print("Server Stopped")
+	fmt.Print("Server Stopped\n")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -263,7 +320,8 @@ func (r *Router) ListenAndServe() {
 	}()
 
 	if err := r.Server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server Shutdown Failed:%+v", err)
+		log.Fatalf("Server Shutdown Failed:%+v\n", err)
 	}
-    fmt.Print("Server Exited Properly")
+    fmt.Print("Server Exited Properly\n")
 }
+
