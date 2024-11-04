@@ -1,10 +1,49 @@
 package ghoul
 
-type CtxErrorNext struct{}
+import (
+	"fmt"
+	"net/http"
+)
 
-func (m *CtxErrorNext) Error() string {
-	return "There isn't next servable handler."
+
+func (e APIError) Error() string {
+    return  fmt.Sprintf("api error: %d", e.StatusCode)
 }
-func NewCtxErrorNext() *CtxErrorNext {
-    return &CtxErrorNext{}
+
+func NewAPIError(statusCode int, err error) APIError {
+    return APIError{
+        StatusCode: statusCode,
+        Msg:        err.Error(),
+    }
 }
+
+func InvalidRequestData(errors map[string]string) APIError {
+    return APIError{
+        StatusCode: http.StatusUnprocessableEntity,
+        Msg:        errors,
+    }
+}
+
+func InvalidJSON() APIError {
+    return NewAPIError(http.StatusBadRequest, fmt.Errorf("invalid JSON request data"))
+}
+
+var DefaultErrorHandler ErrorHandler = func (ctx Ctx, err error) {
+    if err != nil {
+        if apiErr, ok := err.(APIError); ok {
+            ctx.Status(apiErr.StatusCode)
+            ctx.Json(apiErr)
+        }else {
+            ctx.Status(http.StatusInternalServerError)
+            errResp := map[string]any{
+                "statusCode": http.StatusInternalServerError,
+                "msg": http.StatusText(http.StatusInternalServerError),
+            }
+            ctx.Json(errResp)
+        }
+    }
+}
+
+var HandleError = DefaultErrorHandler
+
+

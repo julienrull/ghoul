@@ -6,10 +6,6 @@ import (
 	"strings"
 )
 
-type Renderer struct {
-    Folder string
-    Ext    string 
-}
 
 func NewRenderer(folder string, ext string) *Renderer {
    return &Renderer{

@@ -71,6 +71,7 @@ func GetServer() *Router {
     app.Renderer = NewRenderer("./views/", ".html")
     app.Get("/landing", func(ctx Ctx) error {
         ctx.Write([]byte("landing"))
+        ctx.Status(200)
         return nil
     }).Head("/landing", func(ctx Ctx) error {
         ctx.Write([]byte("landinghead"))
@@ -100,7 +101,7 @@ func GetServer() *Router {
 
     guest := app.Group("/guest")
     guest.Get("/signin", func(ctx Ctx) error {
-        ctx.Write([]byte("signin"))
+        ctx.Send([]byte("signin"))
         return nil
     }).Post("/signin", func(ctx Ctx) error {
         is_auth = true
