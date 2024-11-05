@@ -28,7 +28,7 @@ func InvalidJSON() APIError {
     return NewAPIError(http.StatusBadRequest, fmt.Errorf("invalid JSON request data"))
 }
 
-var DefaultErrorHandler ErrorHandler = func (ctx Ctx, err error) {
+var DefaultErrorHandler ErrorHandler = func (ctx Ctx, err error) error {
     if err != nil {
         if apiErr, ok := err.(APIError); ok {
             ctx.Status(apiErr.StatusCode)
@@ -42,6 +42,7 @@ var DefaultErrorHandler ErrorHandler = func (ctx Ctx, err error) {
             ctx.Json(errResp)
         }
     }
+    return err
 }
 
 var HandleError = DefaultErrorHandler
